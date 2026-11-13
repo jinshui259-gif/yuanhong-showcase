@@ -1,0 +1,17 @@
+.inquiry-form { min-width: 0; }
+.inquiry-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
+.inquiry-wide { grid-column: 1 / -1; }
+.inquiry-field label { display: block; margin-bottom: 6px; font-size: 15px; font-weight: 600; }
+.inquiry-field small { margin-left: 4px; font-size: 12px; font-weight: 400; color: var(--muted); }
+.inquiry-field input, .inquiry-field select, .inquiry-field textarea {
+  box-sizing: border-box; width: 100%; min-width: 0; padding: 10px 12px;
+  border: 1px solid #8c999d; border-radius: 2px; background: white; color: var(--ink); font: inherit; font-size: 16px;
+}
+.inquiry-field textarea { display: block; resize: vertical; }
+.inquiry-field :is(input, select, textarea):focus-visible { outline: 2px solid #13668f; outline-offset: 2px; }
+.inquiry-trap { display: none; }
+.inquiry-note, .inquiry-feedback { font-size: 14px; line-height: 1.65; }
+.inquiry-note { color: var(--muted); margin: 18px 0; }
+.inquiry-feedback:not(:empty) { margin-top: 12px; }
+.inquiry-submit:disabled { cursor: wait; opacity: .75; }
+@media (max-width: 620px) { .inquiry-fields { grid-template-columns: minmax(0, 1fr); } }
