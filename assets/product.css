@@ -2,8 +2,6 @@
 .brand.wordmark { display: inline-grid; justify-items: center; row-gap: 4px; width: 158px; }
 .wordmark .brand-lockup { width: 100%; height: auto; }
 .brand-descriptor { font: 600 11px/1.25 var(--sans); letter-spacing: .11em; padding-left: .11em; white-space: nowrap; color: var(--gold-ink); }
-.footer .wordmark { width: 168px; row-gap: 6px; }
-.footer .brand-descriptor { font-size: 12px; color: var(--gold); }
 
 .mast { background: #fff; color: #0b3553; border-bottom-color: #d8e1e4; }
 .mast-inner { min-height: 104px; }
