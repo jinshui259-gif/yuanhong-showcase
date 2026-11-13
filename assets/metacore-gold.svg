@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 492 500" width="492" height="500" role="img" aria-label="MetaCore">
+  <defs>
+    <clipPath id="tile"><rect width="492" height="500" rx="120"/></clipPath>
+    <linearGradient id="shell" x2=".8" y2="1" gradientUnits="objectBoundingBox"><stop stop-color="#08090b"/><stop offset=".47" stop-color="#111112"/><stop offset="1" stop-color="#09090b"/></linearGradient>
+    <radialGradient id="upper" cx="0" cy="0" r="1" gradientTransform="matrix(295 -146 24 49 440 88)" gradientUnits="userSpaceOnUse"><stop stop-color="#af7612"/><stop offset=".28" stop-color="#745018"/><stop offset=".68" stop-color="#332916" stop-opacity=".8"/><stop offset="1" stop-color="#161616" stop-opacity="0"/></radialGradient>
+    <radialGradient id="inner" cx="0" cy="0" r="1" gradientTransform="matrix(278 -138 115 231 242 359)" gradientUnits="userSpaceOnUse"><stop stop-color="#c09023"/><stop offset=".32" stop-color="#8b671e"/><stop offset=".64" stop-color="#584419"/><stop offset="1" stop-color="#201d13"/></radialGradient>
+    <radialGradient id="deep" cx="0" cy="0" r="1" gradientTransform="matrix(235 -120 70 132 305 183)" gradientUnits="userSpaceOnUse"><stop stop-color="#18140a" stop-opacity=".72"/><stop offset="1" stop-color="#17160e" stop-opacity="0"/></radialGradient>
+    <linearGradient id="core" x1=".25" y1="0" x2=".65" y2="1"><stop stop-color="#845006"/><stop offset=".33" stop-color="#c78006"/><stop offset=".65" stop-color="#f0b52c"/><stop offset=".84" stop-color="#ffe075"/><stop offset="1" stop-color="#ffffe1"/></linearGradient>
+    <radialGradient id="aura" cx="0" cy="0" r="1" gradientTransform="matrix(94 -8 4 112 239 356)" gradientUnits="userSpaceOnUse"><stop stop-color="#ffda52" stop-opacity=".95"/><stop offset=".29" stop-color="#d99515" stop-opacity=".53"/><stop offset=".65" stop-color="#936112" stop-opacity=".21"/><stop offset="1" stop-color="#79521a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="edge"><stop stop-color="#d69a29" stop-opacity="0"/><stop offset=".41" stop-color="#f8c440" stop-opacity=".8"/><stop offset=".58" stop-color="#fff8ab"/><stop offset="1" stop-color="#b27818" stop-opacity=".12"/></linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="492" height="500" fill="url(#shell)"/>
+    <path d="M0 0H492V57L232 184Q228 186 228 191V365L0 455Z" fill="url(#upper)"/>
+    <rect width="492" height="500" fill="url(#aura)"/>
+    <path id="opening" d="M228 365V191Q228 186 232 184L492 56V277Z" fill="url(#inner)"/>
+    <use href="#opening" fill="url(#deep)"/>
+    <path d="M228 365V191Q228 186 232 184L270 165V350Z" fill="url(#core)"/>
+    <path d="M228 364.5V191Q228 186 232 184L487 58.5" fill="none" stroke="#ffd76b" stroke-width="1" opacity=".86"/>
+    <path d="M87 419 492 277" stroke="url(#edge)" stroke-width="1.2" fill="none"/>
+  </g>
+</svg>

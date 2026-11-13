@@ -29,6 +29,8 @@
 .product-hero .wrap { min-height: clamp(430px,41vw,610px); }
 .product-heading, .product-panel .product-heading { font-family: "Instrument Sans", "Segoe UI", Arial, sans-serif; font-weight: 500; font-size: clamp(49px,6.1vw,88px); letter-spacing: -.055em; line-height: 1.05; margin: 15px 0 14px; }
 .product-panel .product-heading { font-size: clamp(44px,4.3vw,66px); }
+.product-heading { display: flex; align-items: center; gap: .23em; }
+.metacore-icon { display: block; flex: none; width: 1.05em; height: auto; }
 .prod-class { font-size: clamp(17px,1.6vw,24px); letter-spacing: .065em; line-height: 1.5; }
 .prod-desc { color: #c9d7d5; max-width: 36em; margin-top: 15px; line-height: 1.85; font-size: 15px; }
 .product-hero .cta, .product-panel .cta { margin-top: 24px; }
