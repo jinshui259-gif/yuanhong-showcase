@@ -14,8 +14,8 @@
   const height = 580;
   const period = 12;
   const tau = 2 * Math.PI;
-  const rings = 88;
-  const sides = 32;
+  const rings = 112;
+  const sides = 40;
   const points = [];
   const patches = [];
   const clamp = value => Math.max(0, Math.min(1, value));
@@ -64,39 +64,33 @@
     }
   }
 
-  // Precompute the reflections of a warm studio on polished yellow gold.
-  const ramp=[[57,29,5],[111,60,8],[170,101,13],[214,145,27],
-              [241,184,55],[255,213,100],[255,236,158],[255,250,217]];
-  const gold=new Uint32Array(256);
-  for (let i=0;i<256;i++) {
-    const pos=i/255*(ramp.length-1), lo=Math.min(ramp.length-2,Math.floor(pos));
-    const t=pos-lo;
-    const rgb=ramp[lo].map((x,k)=>Math.round(x+(ramp[lo+1][k]-x)*t));
-    gold[i]=(255<<24)|(rgb[2]<<16)|(rgb[1]<<8)|rgb[0];
-  }
-  const texSize=256;
-  const studio=new Uint8Array(texSize*texSize);
-  for (let j=0;j<texSize;j++) {
-    for (let i=0;i<texSize;i++) {
-      let x=2*i/(texSize-1)-1, y=2*j/(texSize-1)-1;
-      const h=Math.hypot(x,y);
-      if(h>1) { x/=h; y/=h; }
-      const z=Math.sqrt(Math.max(0,1-x*x-y*y));
-      const rx=2*z*x, ry=2*z*y, rz=2*z*z-1;
-      const key=clamp(-.40*x+.68*y+.60*z);
-      const upperStrip=Math.exp(-1*((ry-.58+.20*rx)/.24)**2);
-      const leftStrip=Math.exp(-1*((rx+.76-.20*ry)/.21)**2);
-      const rightStrip=Math.exp(-1*((rx-.67+.13*ry)/.12)**2);
-      const flag=Math.exp(-1*((ry+.34+.23*rx)/.23)**2);
-      const sheen=.36+.25*key+.11*y+.055*rz+.12*(1-z)**2+
-        .28*upperStrip+.27*leftStrip+.20*rightStrip-.22*flag;
-      studio[j*texSize+i]=Math.round(255*clamp(sheen));
+  // Each entry mixes gold wire with a translucent navy cell. Precomputing
+  // coverage keeps thin lines antialiased without blending hidden back faces.
+  const toneCount = 64;
+  const coverageCount = 128;
+  const wirePalette = new Uint32Array(toneCount * coverageCount);
+  const goldStops = [[183,119,28], [238,167,40], [255,204,81], [255,229,145]];
+  for (let tone = 0; tone < toneCount; tone++) {
+    const light = tone / (toneCount - 1);
+    const position = light * (goldStops.length - 1);
+    const left = Math.min(goldStops.length - 2, Math.floor(position));
+    const color = goldStops[left].map((channel, i) =>
+      channel + (goldStops[left + 1][i] - channel) * (position - left));
+    const cell = [10 + 3 * light, 30 + 11 * light, 41 + 12 * light];
+    const cellAlpha = .46;
+    for (let level = 0; level < coverageCount; level++) {
+      const coverage = level / (coverageCount - 1);
+      const background = cellAlpha * (1 - coverage);
+      const alpha = coverage + background;
+      const [r, g, b] = color.map((channel, i) =>
+        Math.round((channel * coverage + cell[i] * background) / alpha));
+      wirePalette[tone * coverageCount + level] = (Math.round(255 * alpha) << 24) |
+        (b << 16) | (g << 8) | r;
     }
   }
 
   let pixelScale=1, image, pixels, depths;
-  // Interpolate smooth normals per pixel. The fine grid is etched into the
-  // same curved surface, so the reflection remains continuous across a cell.
+  // Shade only the nearest surface so the far side does not clutter the mesh.
   function triangle(a,b,c,patch,second,pulse) {
     const w=canvas.width, h=canvas.height;
     const area=(b.sy-c.sy)*(a.sx-c.sx)+(c.sx-b.sx)*(a.sy-c.sy);
@@ -108,11 +102,13 @@
     const da=(b.sy-c.sy)/area, db=(c.sy-a.sy)/area;
     const ea=(c.sx-b.sx)/area, eb=(a.sx-c.sx)/area;
     const ix=patch.i, iy=patch.j;
-    const m=texSize-1;
     const uStep=second ? Math.hypot(db,eb) : Math.hypot(da,ea);
     const vStep=second ? Math.hypot(da,ea) : Math.hypot(da+db,ea+eb);
-    const uWidth=Math.max(.001,uStep*pixelScale);
-    const vWidth=Math.max(.001,vStep*pixelScale);
+    const uPixels=1/Math.max(.0001,uStep), vPixels=1/Math.max(.0001,vStep);
+    const halfWidth=Math.max(.65,1.02*pixelScale);
+    // Narrow the apparent line at grazing angles before cells overlap.
+    const uWeight=.30+.70*clamp(uPixels/2.5);
+    const vWeight=.30+.70*clamp(vPixels/2.5);
     for(let y=y0;y<=y1;y++) {
       let wa=da*(x0+.5-c.sx)+ea*(y+.5-c.sy);
       let wb=db*(x0+.5-c.sx)+eb*(y+.5-c.sy);
@@ -124,17 +120,17 @@
         depths[k]=z;
         const nx=wa*a.viewX+wb*b.viewX+wc*c.viewX;
         const ny=wa*a.viewY+wb*b.viewY+wc*c.viewY;
-        const tx=Math.min(m,Math.max(0,Math.round((nx+1)*m*.5)));
-        const ty=Math.min(m,Math.max(0,Math.round((ny+1)*m*.5)));
         const u=second?wb:1-wa, v=second?1-wa:wc;
-        // Mesh intervals of two cells give the specular bands room to read.
-        const du=ix%2 ? 1-u : u, dv=iy%2 ? 1-v : v;
-        const line=clamp(1.05-Math.min(du/uWidth,dv/vWidth));
-        const mark=iy%(sides/2);
-        const distance=mark===0?v:mark===sides/2-1?1-v:2;
-        const rail=clamp(1.6-distance/vWidth);
-        const shade=studio[ty*texSize+tx]+8*z+line*19+rail*(12+70*pulse);
-        pixels[k]=gold[Math.min(255,Math.max(0,Math.round(shade)))];
+        const du=(ix%2?1-u:u)*uPixels, dv=(iy%2?1-v:v)*vPixels;
+        const ringCoverage=clamp(halfWidth+.5-du)*uWeight;
+        const meridianCoverage=clamp(halfWidth+.5-dv)*vWeight;
+        const coverage=Math.max(ringCoverage,meridianCoverage);
+        const railIndex=iy%(sides/2);
+        const rail=railIndex===0 || railIndex===sides/2-1;
+        const glint=rail && meridianCoverage>ringCoverage ? .18*pulse : 0;
+        const light=clamp(.56-.24*nx+.29*ny+.075*z+glint);
+        const tone=Math.round(light*(toneCount-1));
+        pixels[k]=wirePalette[tone*coverageCount+Math.round(coverage*(coverageCount-1))];
       }
     }
   }
