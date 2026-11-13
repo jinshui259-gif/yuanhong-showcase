@@ -91,3 +91,9 @@
 
 .model-function { display: flex; align-items: center; gap: 10px; color: var(--gold-ink); }
 .model-function::before { content: ""; width: 22px; height: 2px; background: #a58c5d; }
+
+.offshore-hero .scenery { object-position: 50% 14%; }
+@media (max-width: 580px) {
+  .offshore-hero .scenery { object-position: 31% 45%; }
+  .offshore-hero .hero-inner { padding-block: 48px 150px; }
+}
