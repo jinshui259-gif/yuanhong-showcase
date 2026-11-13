@@ -14,7 +14,6 @@
   max-height: none;
   object-fit: contain;
 }
-.manifold-stage img { filter: grayscale(1) sepia(1) saturate(2.2) brightness(1.2); }
 .manifold-stage canvas { display: block; }
 .manifold-stage [hidden], .manifold-toggle[hidden] { display: none; }
 .manifold-figure .manifold-caption {
