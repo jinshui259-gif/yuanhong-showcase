@@ -69,9 +69,9 @@
   const toneCount = 64;
   const coverageCount = 128;
   const wirePalette = new Uint32Array(toneCount * coverageCount);
-  // Use the polished surface's yellow-gold ramp for the wires themselves.
-  const goldStops = [[57,29,5], [111,60,8], [170,101,13], [214,145,27],
-                     [241,184,55], [255,213,100], [255,236,158], [255,250,217]];
+  // Sampled from the polished gold reference: amber, body gold and glints.
+  const goldStops = [[151,90,8], [188,119,19], [220,155,35], [241,186,62],
+                     [249,204,86], [253,217,110], [255,225,132], [255,247,200]];
   for (let tone = 0; tone < toneCount; tone++) {
     const light = tone / (toneCount - 1);
     const position = light * (goldStops.length - 1);
@@ -130,6 +130,8 @@
     const uPixels=1/Math.max(.0001,uStep), vPixels=1/Math.max(.0001,vStep);
     const halfWidth=Math.max(.78,1.22*pixelScale);
     const haloWidth=2.5*halfWidth;
+    const uFacing=(second ? -.55*db-.83*eb : .55*da+.83*ea)*uPixels;
+    const vFacing=(second ? .55*da+.83*ea : .55*(da+db)+.83*(ea+eb))*vPixels;
     // Narrow the apparent line at grazing angles before cells overlap.
     const uWeight=.30+.70*clamp(uPixels/2.5);
     const vWeight=.30+.70*clamp(vPixels/2.5);
@@ -156,7 +158,15 @@
         const tx=Math.round(clamp((nx+1)*.5)*(texSize-1));
         const ty=Math.round(clamp((ny+1)*.5)*(texSize-1));
         const reflection=studio[ty*texSize+tx]/255;
-        const light=clamp(.44+.73*reflection+.022*z+glint);
+        // A tiny bevel rolls the highlight across each strand. Use the projected
+        // gradient to keep its lit edge facing the same light on both axes.
+        const alongRing=ringCoverage>=meridianCoverage;
+        const across=alongRing ? (ix%2 ? -du : du) : (iy%2 ? -dv : dv);
+        const bevel=clamp(.5+.5*across*(alongRing?uFacing:vFacing)/halfWidth);
+        const filament=clamp(1-Math.abs(bevel-.68)/.26);
+        const highlight=clamp((reflection-.55)/.43);
+        const light=clamp(.17+.51*reflection+.12*bevel+.028*z+
+                          filament*highlight*highlight*.27+glint*.40);
         // A bright filament and a narrow gold halo leave the navy gaps open.
         const coverage=core+(1-core)*halo*halo*(.35+.60*reflection);
         const tone=Math.round(light*(toneCount-1));
