@@ -22,10 +22,10 @@
 
   // An orthonormal frame keeps the tube circular even on steep bends.
   // The longitudinal grid rotates half a turn before the two ends meet.
-  function surface(u, v) {
+  function surface(u, v, radialFraction=1) {
     const cu=Math.cos(u), su=Math.sin(u);
     const major=1.35+.155*Math.cos(3*u+.4);
-    const radius=.605+.035*Math.sin(2*u-.45);
+    const radius=radialFraction*(.605+.035*Math.sin(2*u-.45));
     const majorSlope=-.465*Math.sin(3*u+.4);
     const tx=majorSlope*cu-major*su, ty=majorSlope*su+major*cu;
     const tz=.99*Math.cos(2*u+.6);
@@ -239,6 +239,96 @@
     }
   }
 
+  // The seven lanes share the mesh's centreline and stay inside its wall.
+  const meteors = [
+    {start:.025, turns:1, lane:.26, spread:.48, tail:.56},
+    {start:.171, turns:-1, lane:2.3, spread:.38, tail:.49},
+    {start:.315, turns:1, lane:4.8, spread:.55, tail:.58},
+    {start:.456, turns:2, lane:1.4, spread:.44, tail:.63},
+    {start:.607, turns:1, lane:3.6, spread:.33, tail:.47},
+    {start:.751, turns:-1, lane:5.4, spread:.50, tail:.55},
+    {start:.879, turns:1, lane:2.8, spread:.46, tail:.52}
+  ];
+  let meteorLight;
+  const illuminated = [];
+  const tailSteps = 18;
+  function meteorPosition(meteor,u,camera) {
+    // Cancel the wall's half-twist so each interior path joins after one turn.
+    const lane=meteor.lane+.85*Math.sin(2*u+meteor.lane)-u*.5;
+    const p=surface(u,lane,meteor.spread);
+    const depth=camera.zx*p.x+camera.zy*p.y+camera.zz*p.z;
+    const scale=130*pixelScale/(1-depth/13);
+    return {
+      x:width*pixelScale*.5+scale*(camera.xx*p.x+camera.xy*p.y+camera.xz*p.z),
+      y:height*pixelScale*.5-scale*(camera.yx*p.x+camera.yy*p.y+camera.yz*p.z),
+      depth, scale:scale/130
+    };
+  }
+  function lightMeteorPixel(k,z,brightness) {
+    const separation=depths[k]-z;
+    if(separation<0) return;
+    // Opaque wires hide the meteor. The far bend also dims it at crossings.
+    const transmission=(255-(pixels[k]>>>24))/138;
+    const strength=Math.round(255*clamp(brightness*transmission/(1+.55*Math.max(0,separation-.8))));
+    if(strength<=meteorLight[k]) return;
+    if(!meteorLight[k]) illuminated.push(k);
+    meteorLight[k]=strength;
+  }
+  function meteorSegment(a,b,fraction) {
+    const dx=b.x-a.x, dy=b.y-a.y, lengthSq=dx*dx+dy*dy;
+    const radius=(.65+2.7*fraction)*b.scale;
+    const reach=3.6*radius, w=canvas.width;
+    for(let y=Math.max(0,Math.floor(Math.min(a.y,b.y)-reach));y<=Math.min(canvas.height-1,Math.ceil(Math.max(a.y,b.y)+reach));y++) {
+      for(let x=Math.max(0,Math.floor(Math.min(a.x,b.x)-reach));x<=Math.min(w-1,Math.ceil(Math.max(a.x,b.x)+reach));x++) {
+        const px=x+.5-a.x, py=y+.5-a.y;
+        const t=clamp((px*dx+py*dy)/Math.max(.001,lengthSq));
+        const d2=((px-t*dx)**2+(py-t*dy)**2)/(radius*radius);
+        if(d2>12) continue;
+        const body=1/(1+3*d2*d2), glow=.28/(1+d2);
+        lightMeteorPixel(y*w+x,a.depth+t*(b.depth-a.depth),fraction**1.18*(body+glow));
+      }
+    }
+  }
+  function meteorHead(p) {
+    const w=canvas.width, reach=Math.ceil(12*p.scale);
+    for(let y=Math.max(0,Math.floor(p.y-reach));y<=Math.min(canvas.height-1,p.y+reach);y++) {
+      for(let x=Math.max(0,Math.floor(p.x-reach));x<=Math.min(w-1,p.x+reach);x++) {
+        const dx=(x+.5-p.x)/p.scale, dy=(y+.5-p.y)/p.scale;
+        const r2=dx*dx+dy*dy;
+        const core=1.55/(1+(r2/14)**2);
+        const glint=.65*clamp(1-Math.abs(dx+.32*dy)/1.5)*clamp(1-Math.abs(dy)/11);
+        lightMeteorPixel(y*w+x,p.depth,core+glint+.42/(1+r2/30));
+      }
+    }
+  }
+  function drawMeteors(phase,camera) {
+    for(const meteor of meteors) {
+      const u=tau*(meteor.start+phase*meteor.turns);
+      const tail=Math.sign(meteor.turns)*meteor.tail;
+      let previous=meteorPosition(meteor,u-tail,camera);
+      for(let step=1;step<=tailSteps;step++) {
+        const fraction=step/tailSteps;
+        const next=meteorPosition(meteor,u-tail*(1-fraction),camera);
+        meteorSegment(previous,next,fraction);
+        previous=next;
+      }
+      meteorHead(previous);
+    }
+    for(const k of illuminated) {
+      const intensity=meteorLight[k]/255;
+      const old=pixels[k], alpha=(old>>>24)/255;
+      const outputAlpha=intensity+alpha*(1-intensity);
+      const oldWeight=alpha*(1-intensity)/outputAlpha, weight=intensity/outputAlpha;
+      const r=Math.round((old&255)*oldWeight+255*weight);
+      const g=Math.round(((old>>>8)&255)*oldWeight+(155+100*intensity)*weight);
+      const b=Math.round(((old>>>16)&255)*oldWeight+(20+212*intensity**3)*weight);
+      pixels[k]=(Math.round(255*outputAlpha)<<24)|(b<<16)|(g<<8)|r;
+      emission[k]=Math.max(emission[k],meteorLight[k]);
+      meteorLight[k]=0;
+    }
+    illuminated.length=0;
+  }
+
   function draw(seconds) {
     const phase=seconds/period, angle=tau*phase;
     const cy=Math.cos(angle), sy=Math.sin(angle);
@@ -268,6 +358,7 @@
       triangle(a,b,c,patch,false,pulse);
       triangle(a,c,d,patch,true,pulse);
     }
+    drawMeteors(phase,{xx,xy,xz,yx,yy,yz,zx,zy,zz});
     ctx.putImageData(image,0,0);
     compositeBloom();
   }
@@ -287,6 +378,7 @@
       pixels=new Uint32Array(image.data.buffer);
       depths=new Float32Array(w*h);
       emission=new Uint8Array(w*h);
+      meteorLight=new Uint8Array(w*h);
       resizeBloom(w,h);
       pixelScale=w/width;
       draw(elapsed);
