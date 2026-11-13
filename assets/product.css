@@ -55,9 +55,12 @@
 .model-english { display:block; font-family: Arial, sans-serif; color: #5a6967; font-size: 12px; margin-top: 3px; line-height: 1.5; }
 .model-row p { margin-top: 10px; line-height: 1.85; font-size:15px; color: var(--muted); }
 .model-function { display:block; font-size:12px; font-weight: 700; letter-spacing: .08em; color: #80502d; margin-bottom: 4px; }
-@media(max-width: 980px) and (min-width:781px) {
-  .mast-inner { width: 92%; } .nav { gap: 18px; }
-  .nav-link { font-size: 13px; } .nav-cta { padding-inline: 12px; }
+@media (min-width: 781px) and (max-width: 1099px) {
+  .mast-inner { width: 94%; gap: 14px; }
+  .mast .brand-lockup { width: clamp(128px, 15vw, 164px); }
+  .mast .nav { gap: clamp(9px, 1.45vw, 18px); }
+  .mast .nav-link { font-size: 13px; letter-spacing: .045em; white-space: nowrap; }
+  .mast .nav-cta { padding-inline: 11px; gap: 8px; }
 }
 @media(max-width:780px) {
 
