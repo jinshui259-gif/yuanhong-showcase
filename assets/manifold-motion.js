@@ -69,7 +69,9 @@
   const toneCount = 64;
   const coverageCount = 128;
   const wirePalette = new Uint32Array(toneCount * coverageCount);
-  const goldStops = [[183,119,28], [238,167,40], [255,204,81], [255,229,145]];
+  // Use the polished surface's yellow-gold ramp for the wires themselves.
+  const goldStops = [[57,29,5], [111,60,8], [170,101,13], [214,145,27],
+                     [241,184,55], [255,213,100], [255,236,158], [255,250,217]];
   for (let tone = 0; tone < toneCount; tone++) {
     const light = tone / (toneCount - 1);
     const position = light * (goldStops.length - 1);
@@ -89,6 +91,27 @@
     }
   }
 
+  // Reflections move over the mesh as its normals rotate relative to the lights.
+  const texSize=256;
+  const studio=new Uint8Array(texSize*texSize);
+  for (let j=0;j<texSize;j++) {
+    for (let i=0;i<texSize;i++) {
+      let x=2*i/(texSize-1)-1, y=2*j/(texSize-1)-1;
+      const h=Math.hypot(x,y);
+      if(h>1) { x/=h; y/=h; }
+      const z=Math.sqrt(Math.max(0,1-x*x-y*y));
+      const rx=2*z*x, ry=2*z*y, rz=2*z*z-1;
+      const key=clamp(-.40*x+.68*y+.60*z);
+      const upperStrip=Math.exp(-1*((ry-.58+.20*rx)/.24)**2);
+      const leftStrip=Math.exp(-1*((rx+.76-.20*ry)/.21)**2);
+      const rightStrip=Math.exp(-1*((rx-.67+.13*ry)/.12)**2);
+      const flag=Math.exp(-1*((ry+.34+.23*rx)/.23)**2);
+      const sheen=.36+.25*key+.11*y+.055*rz+.12*(1-z)**2+
+        .28*upperStrip+.27*leftStrip+.20*rightStrip-.22*flag;
+      studio[j*texSize+i]=Math.round(255*clamp(sheen));
+    }
+  }
+
   let pixelScale=1, image, pixels, depths;
   // Shade only the nearest surface so the far side does not clutter the mesh.
   function triangle(a,b,c,patch,second,pulse) {
@@ -105,7 +128,8 @@
     const uStep=second ? Math.hypot(db,eb) : Math.hypot(da,ea);
     const vStep=second ? Math.hypot(da,ea) : Math.hypot(da+db,ea+eb);
     const uPixels=1/Math.max(.0001,uStep), vPixels=1/Math.max(.0001,vStep);
-    const halfWidth=Math.max(.65,1.02*pixelScale);
+    const halfWidth=Math.max(.78,1.22*pixelScale);
+    const haloWidth=2.5*halfWidth;
     // Narrow the apparent line at grazing angles before cells overlap.
     const uWeight=.30+.70*clamp(uPixels/2.5);
     const vWeight=.30+.70*clamp(vPixels/2.5);
@@ -124,11 +148,17 @@
         const du=(ix%2?1-u:u)*uPixels, dv=(iy%2?1-v:v)*vPixels;
         const ringCoverage=clamp(halfWidth+.5-du)*uWeight;
         const meridianCoverage=clamp(halfWidth+.5-dv)*vWeight;
-        const coverage=Math.max(ringCoverage,meridianCoverage);
+        const core=Math.max(ringCoverage,meridianCoverage);
+        const halo=Math.max(clamp(1-du/haloWidth)*uWeight,clamp(1-dv/haloWidth)*vWeight);
         const railIndex=iy%(sides/2);
         const rail=railIndex===0 || railIndex===sides/2-1;
         const glint=rail && meridianCoverage>ringCoverage ? .18*pulse : 0;
-        const light=clamp(.56-.24*nx+.29*ny+.075*z+glint);
+        const tx=Math.round(clamp((nx+1)*.5)*(texSize-1));
+        const ty=Math.round(clamp((ny+1)*.5)*(texSize-1));
+        const reflection=studio[ty*texSize+tx]/255;
+        const light=clamp(.44+.73*reflection+.022*z+glint);
+        // A bright filament and a narrow gold halo leave the navy gaps open.
+        const coverage=core+(1-core)*halo*halo*(.35+.60*reflection);
         const tone=Math.round(light*(toneCount-1));
         pixels[k]=wirePalette[tone*coverageCount+Math.round(coverage*(coverageCount-1))];
       }
