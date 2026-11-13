@@ -94,6 +94,7 @@
   // Reflections move over the mesh as its normals rotate relative to the lights.
   const texSize=256;
   const studio=new Uint8Array(texSize*texSize);
+  const stripReflection=new Uint8Array(texSize*texSize);
   for (let j=0;j<texSize;j++) {
     for (let i=0;i<texSize;i++) {
       let x=2*i/(texSize-1)-1, y=2*j/(texSize-1)-1;
@@ -109,10 +110,70 @@
       const sheen=.36+.25*key+.11*y+.055*rz+.12*(1-z)**2+
         .28*upperStrip+.27*leftStrip+.20*rightStrip-.22*flag;
       studio[j*texSize+i]=Math.round(255*clamp(sheen));
+      stripReflection[j*texSize+i]=Math.round(255*Math.max(upperStrip,.92*leftStrip,.83*rightStrip));
     }
   }
 
-  let pixelScale=1, image, pixels, depths;
+  let pixelScale=1, image, pixels, depths, emission;
+  // Produce optical bloom from visible, illuminated strands. The mask is
+  // downsampled before blurring to keep the animation inexpensive on phones.
+  const bloomCanvas=document.createElement('canvas');
+  const bloomContext=bloomCanvas.getContext('2d');
+  const bloomStep=6;
+  let bloomImage, bloomPixels, sourceLight, blurX, nearLight, farLight;
+  function resizeBloom(w,h) {
+    bloomCanvas.width=Math.ceil(w/bloomStep);
+    bloomCanvas.height=Math.ceil(h/bloomStep);
+    bloomImage=bloomContext.createImageData(bloomCanvas.width,bloomCanvas.height);
+    bloomPixels=new Uint32Array(bloomImage.data.buffer);
+    sourceLight=new Float32Array(bloomPixels.length);
+    blurX=new Float32Array(bloomPixels.length);
+    nearLight=new Float32Array(bloomPixels.length);
+    farLight=new Float32Array(bloomPixels.length);
+  }
+  function blurLight(input,output,stride) {
+    const w=bloomCanvas.width, h=bloomCanvas.height;
+    for(let y=0;y<h;y++) {
+      const row=y*w;
+      for(let x=0;x<w;x++) {
+        const k=row+x;
+        blurX[k]=(input[k]*6+
+          4*(input[row+Math.max(0,x-stride)]+input[row+Math.min(w-1,x+stride)])+
+          input[row+Math.max(0,x-2*stride)]+input[row+Math.min(w-1,x+2*stride)])/16;
+      }
+    }
+    for(let y=0;y<h;y++) {
+      const top=Math.max(0,y-stride)*w, bottom=Math.min(h-1,y+stride)*w;
+      const farTop=Math.max(0,y-2*stride)*w, farBottom=Math.min(h-1,y+2*stride)*w;
+      for(let x=0,k=y*w;x<w;x++,k++) {
+        output[k]=(blurX[k]*6+4*(blurX[top+x]+blurX[bottom+x])+blurX[farTop+x]+blurX[farBottom+x])/16;
+      }
+    }
+  }
+  function compositeBloom() {
+    const w=canvas.width, h=canvas.height, bw=bloomCanvas.width;
+    sourceLight.fill(0);
+    for(let y=0;y<h;y++) {
+      const row=Math.floor(y/bloomStep)*bw;
+      for(let tile=0;tile<bw;tile++) {
+        const x0=tile*bloomStep, stop=y*w+Math.min(w,x0+bloomStep);
+        let sum=0;
+        for(let k=y*w+x0;k<stop;k++) sum+=emission[k];
+        sourceLight[row+tile]+=sum/(bloomStep*bloomStep);
+      }
+    }
+    blurLight(sourceLight,nearLight,1);
+    blurLight(nearLight,farLight,2);
+    for(let k=0;k<bloomPixels.length;k++) {
+      const intensity=clamp((nearLight[k]*2.0+farLight[k]*1.08)/255);
+      bloomPixels[k]=(Math.round(230*intensity)<<24)|(48<<16)|(178<<8)|255;
+    }
+    bloomContext.putImageData(bloomImage,0,0);
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.drawImage(bloomCanvas,0,0,bw*bloomStep,bloomCanvas.height*bloomStep);
+    ctx.restore();
+  }
   // Shade only the nearest surface so the far side does not clutter the mesh.
   function triangle(a,b,c,patch,second,pulse) {
     const w=canvas.width, h=canvas.height;
@@ -164,9 +225,12 @@
         const across=alongRing ? (ix%2 ? -du : du) : (iy%2 ? -dv : dv);
         const bevel=clamp(.5+.5*across*(alongRing?uFacing:vFacing)/halfWidth);
         const filament=clamp(1-Math.abs(bevel-.68)/.26);
+        const band=stripReflection[ty*texSize+tx]/255;
         const highlight=clamp((reflection-.55)/.43);
-        const light=clamp(.17+.51*reflection+.12*bevel+.028*z+
-                          filament*highlight*highlight*.27+glint*.40);
+        const base=.17+.51*reflection+.12*bevel+.028*z+filament*highlight*highlight*.27+glint*.40;
+        const specular=band*band*(.62+.38*filament);
+        const light=clamp(base+.66*specular);
+        emission[k]=Math.round(255*clamp((.11+.89*band*band)*core+.18*specular*halo));
         // A bright filament and a narrow gold halo leave the navy gaps open.
         const coverage=core+(1-core)*halo*halo*(.35+.60*reflection);
         const tone=Math.round(light*(toneCount-1));
@@ -196,7 +260,7 @@
       p.viewX=xx*p.nx+xy*p.ny+xz*p.nz;
       p.viewY=yx*p.nx+yy*p.ny+yz*p.nz;
     }
-    pixels.fill(0); depths.fill(-Infinity);
+    pixels.fill(0); depths.fill(-Infinity); emission.fill(0);
     for(const patch of patches) {
       const {a,b,c,d,i,j}=patch;
       const path=(i/rings+(j>=sides/2-1&&j<sides-1?1:0))*.5;
@@ -205,6 +269,7 @@
       triangle(a,c,d,patch,true,pulse);
     }
     ctx.putImageData(image,0,0);
+    compositeBloom();
   }
 
   const preference=window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -221,6 +286,8 @@
       image=ctx.createImageData(w,h);
       pixels=new Uint32Array(image.data.buffer);
       depths=new Float32Array(w*h);
+      emission=new Uint8Array(w*h);
+      resizeBloom(w,h);
       pixelScale=w/width;
       draw(elapsed);
       canvas.hidden=false; poster.hidden=true;
